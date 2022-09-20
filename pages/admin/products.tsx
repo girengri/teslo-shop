@@ -1,6 +1,6 @@
 import NextLink from "next/link";
-import { CategoryOutlined } from "@mui/icons-material";
-import { CardMedia, Grid, Link } from "@mui/material";
+import { AddOutlined, CategoryOutlined } from "@mui/icons-material";
+import { Box, Button, CardMedia, Grid, Link } from "@mui/material";
 import { DataGrid, GridColDef, GridRenderCellParams } from "@mui/x-data-grid";
 import useSWR from "swr";
 
@@ -18,7 +18,7 @@ const columns: GridColDef[] = [
                         component="img"
                         alt={row.title}
                         className="fadeIn"
-                        image={`/products/${row.img}`}
+                        image={row.img}
                     />
                 </a>
             );
@@ -66,16 +66,28 @@ const ProductsPage = () => {
             subTitle={"Mantenimiento de productos"}
             icon={<CategoryOutlined />}
         >
-            <Grid container className="fadeIn">
-                <Grid item xs={12} sx={{ height: 650, width: "100%" }}>
-                    <DataGrid
-                        rows={rows}
-                        columns={columns}
-                        pageSize={10}
-                        rowsPerPageOptions={[10]}
-                    />
+            <>
+                <Box display="flex" justifyContent="end" sx={{ marginBottom: 2 }}>
+                    <Button
+                        startIcon={<AddOutlined />}
+                        color="secondary"
+                        href="/admin/products/new"
+                    >
+                        Crear producto
+                    </Button>
+                </Box>
+
+                <Grid container className="fadeIn">
+                    <Grid item xs={12} sx={{ height: 650, width: "100%" }}>
+                        <DataGrid
+                            rows={rows}
+                            columns={columns}
+                            pageSize={10}
+                            rowsPerPageOptions={[10]}
+                        />
+                    </Grid>
                 </Grid>
-            </Grid>
+            </>
         </AdminLayout>
     );
 };

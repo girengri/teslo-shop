@@ -1,5 +1,6 @@
-import { FC, useEffect, useState } from "react";
+import { ChangeEvent, FC, useEffect, useRef, useState } from "react";
 import { GetServerSideProps } from "next";
+import { useRouter } from "next/router";
 import { useForm } from "react-hook-form";
 
 import {
@@ -33,6 +34,8 @@ import {
 import { AdminLayout } from "../../../components/layouts";
 import { IProduct } from "../../../interfaces";
 import { dbProducts } from "../../../database";
+import { tesloApi } from "../../../api";
+import { Product } from "../../../models";
 
 const validTypes = ["shirts", "pants", "hoodies", "hats"];
 const validGender = ["men", "women", "kid", "unisex"];
@@ -57,7 +60,11 @@ interface Props {
 }
 
 const ProductAdminPage: FC<Props> = ({ product }) => {
+    const router = useRouter();
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
     const [newTagValue, setNewTagValue] = useState("");
+    const [isSaving, setIsSaving] = useState(false);
 
     const {
         register,
@@ -116,7 +123,54 @@ const ProductAdminPage: FC<Props> = ({ product }) => {
         setValue("tags", updatedTags, { shouldValidate: true });
     };
 
-    const onSubmit = (formData: FormData) => { };
+    const onFilesSelected = async ({ target }: ChangeEvent<HTMLInputElement>) => {
+        if (!target.files || target.files.length === 0) {
+            return;
+        }
+
+        try {
+            for (const file of target.files) {
+                const formData = new FormData();
+                formData.append("file", file);
+                const { data } = await tesloApi.post("/admin/upload", formData);
+                setValue("images", [...getValues("images"), data.message], {
+                    shouldValidate: true,
+                });
+            }
+        } catch (error) {
+            console.log({ error });
+        }
+    };
+
+    const onDeleteImage = (image: string) => {
+        setValue(
+            "images",
+            getValues("images").filter((img) => img !== image),
+            { shouldValidate: true }
+        );
+    };
+
+    const onSubmit = async (form: FormData) => {
+        if (form.images.length < 2) return alert("Mínimo 2 imagenes");
+        setIsSaving(true);
+
+        try {
+            const { data } = await tesloApi({
+                url: "/admin/products",
+                method: form._id ? "PUT" : "POST",
+                data: form,
+            });
+
+            if (!form._id) {
+                router.replace(`/admin/products/${form.slug}`);
+            } else {
+                setIsSaving(false);
+            }
+        } catch (error) {
+            console.log(error);
+            setIsSaving(false);
+        }
+    };
 
     return (
         <AdminLayout
@@ -131,6 +185,7 @@ const ProductAdminPage: FC<Props> = ({ product }) => {
                         startIcon={<SaveOutlined />}
                         sx={{ width: "150px" }}
                         type="submit"
+                        disabled={isSaving}
                     >
                         Guardar
                     </Button>
@@ -314,28 +369,45 @@ const ProductAdminPage: FC<Props> = ({ product }) => {
                                 fullWidth
                                 startIcon={<UploadOutlined />}
                                 sx={{ mb: 3 }}
+                                onClick={() => fileInputRef.current?.click()}
                             >
                                 Cargar imagen
                             </Button>
+
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                multiple
+                                accept="image/png, image/gif, image/jpeg"
+                                style={{ display: "none" }}
+                                onChange={(event) => onFilesSelected(event)}
+                            />
 
                             <Chip
                                 label="Es necesario al 2 imagenes"
                                 color="error"
                                 variant="outlined"
+                                sx={{
+                                    display: getValues("images").length < 2 ? "flex" : "none",
+                                }}
                             />
 
                             <Grid container spacing={2}>
-                                {product.images.map((img) => (
+                                {getValues("images").map((img) => (
                                     <Grid item xs={4} sm={3} key={img}>
                                         <Card>
                                             <CardMedia
                                                 component="img"
                                                 className="fadeIn"
-                                                image={`/products/${img}`}
+                                                image={img}
                                                 alt={img}
                                             />
                                             <CardActions>
-                                                <Button fullWidth color="error">
+                                                <Button
+                                                    fullWidth
+                                                    color="error"
+                                                    onClick={() => onDeleteImage(img)}
+                                                >
                                                     Borrar
                                                 </Button>
                                             </CardActions>
@@ -356,7 +428,18 @@ const ProductAdminPage: FC<Props> = ({ product }) => {
 export const getServerSideProps: GetServerSideProps = async ({ query }) => {
     const { slug = "" } = query;
 
-    const product = await dbProducts.getProductBySlug(slug.toString());
+    let product: IProduct | null;
+
+    if (slug === "new") {
+        // Crear un producto
+        const tempProduct = JSON.parse(JSON.stringify(new Product()));
+        delete tempProduct._id;
+        tempProduct.images = ["img1.jpg", "img2-jpg"];
+
+        product = tempProduct;
+    } else {
+        product = await dbProducts.getProductBySlug(slug.toString());
+    }
 
     if (!product) {
         return {
